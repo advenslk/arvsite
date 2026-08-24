@@ -7,6 +7,7 @@ on:
       - 'artifacts/arvex-hosting/**'
       - 'artifacts/api-server/src/routes/orders.ts'
       - '.github/workflows/arvex-repair.yml'
+      - '.github/arvex_repair.py'
 
 permissions:
   contents: write
@@ -39,8 +40,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add artifacts/arvex-hosting/src/App.tsx artifacts/api-server/src/routes/orders.ts .github/workflows/arvex-repair.yml
-          git rm .github/arvex_repair.py
+          git add artifacts/arvex-hosting/src/App.tsx artifacts/api-server/src/routes/orders.ts .github/workflows/arvex-repair.yml .github/arvex_repair.py
           if git diff --cached --quiet; then
             exit 0
           fi
