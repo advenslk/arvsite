@@ -57,10 +57,12 @@ router.post("/orders", async (req, res) => {
     const region = requiredString(req.body?.region, "region");
     const total = Number(req.body?.total);
     const currency = typeof req.body?.currency === 'string' ? req.body.currency.toUpperCase() : 'USD';
+    const billingCycle = req.body?.billingCycle === 'yearly' ? 'yearly' : 'monthly';
     if (service === 'vps') {
-      const expected = VPS_PRICES[plan];
-      if (!expected || currency !== 'LKR' || Math.abs(total - expected) > 0.01) {
-        return res.status(400).json({ message: 'Invalid VPS plan or price.' });
+      const monthlyPrice = VPS_PRICES[plan];
+      const expected = billingCycle === 'yearly' ? Math.round(monthlyPrice * 0.8) : monthlyPrice;
+      if (!monthlyPrice || currency !== 'LKR' || Math.abs(total - expected) > 0.01) {
+        return res.status(400).json({ message: 'Invalid VPS plan, billing cycle or price.' });
       }
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

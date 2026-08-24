@@ -129,7 +129,7 @@ function OrderModal({plan,onClose}:{plan:any;onClose:()=>void}) {
   const [,setLocation]=useLocation();
   const isLkr=plan.currency==='LKR';
   const display=isLkr?`LKR ${Math.round(Number(plan.price)).toLocaleString('en-LK')}`:`$${Number(plan.price).toFixed(2)}`;
-  const checkout=()=>{const params=new URLSearchParams({plan:String(plan.name),service:String(plan.kind),price:String(plan.price),currency:plan.currency||'USD'});setLocation(`/checkout?${params.toString()}`)};
+  const checkout=()=>{const params=new URLSearchParams({plan:String(plan.name),service:String(plan.kind),price:String(plan.price),currency:plan.currency||'USD',billing:'monthly'});setLocation(`/checkout?${params.toString()}`)};
   return <div className="modal-backdrop"><div className="order-modal"><button className="modal-close" onClick={onClose} data-testid="button-close-modal"><X size={18}/></button><p className="eyebrow">CONFIGURATION READY</p><h2>{plan.name} is a good place to start.</h2><p>Continue to checkout to choose a region, operating system and billing cycle.</p><div className="modal-summary"><span>{String(plan.kind).replaceAll('-',' ').toUpperCase()}</span><strong>{display} <small>/ month</small></strong></div><Button onClick={checkout} data-testid="button-continue-checkout">Continue to checkout <ArrowRight size={16}/></Button></div></div>;
 }
 
@@ -153,7 +153,8 @@ function Checkout(){
   const params=new URLSearchParams(window.location.search);
   const serviceKey=params.get('service')||'vps';
   const planName=params.get('plan')||'ARX-VPS-02';
-  const currency=params.get('currency')||'LKR';
+  const currency=(params.get('currency')||'LKR').toUpperCase();
+  const billing=params.get('billing')==='yearly'?'yearly':'monthly';
   const parsedPrice=Number(params.get('price'));
   const fallbackPlan=(plans as any)[serviceKey]?.find((p:any)=>p.name===planName) || (plans as any).vps[0];
   const price=Number.isFinite(parsedPrice)&&parsedPrice>0?parsedPrice:Number(fallbackPlan.price);
@@ -163,7 +164,7 @@ function Checkout(){
   const [step,setStep]=useState(1); const [coupon,setCoupon]=useState(''); const [couponMsg,setCouponMsg]=useState(''); const [done,setDone]=useState(false); const [submitting,setSubmitting]=useState(false); const [error,setError]=useState(''); const [orderId,setOrderId]=useState('');
   const discount=coupon.toUpperCase()==='ARVEX10'?price*0.1:0;
   const total=Math.max(0,price-discount);
-  const placeOrder=async()=>{setSubmitting(true);setError('');try{const response=await fetch('/api/orders',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({plan:actualPlan.name,service:serviceKey,region:'Frankfurt, Germany',total,currency})});const payload=await response.json();if(!response.ok)throw new Error(payload.message||'Could not place your order.');setOrderId(payload.orderId);setDone(true)}catch(err){setError(err instanceof Error?err.message:'Could not place your order.')}finally{setSubmitting(false)}};
+  const placeOrder=async()=>{setSubmitting(true);setError('');try{const response=await fetch('/api/orders',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({plan:actualPlan.name,service:serviceKey,region:'Frankfurt, Germany',total,currency,billingCycle:billing})});const payload=await response.json();if(!response.ok)throw new Error(payload.message||'Could not place your order.');setOrderId(payload.orderId);setDone(true)}catch(err){setError(err instanceof Error?err.message:'Could not place your order.')}finally{setSubmitting(false)}};
   if(isLoading)return <PublicShell><main className="checkout-page complete"><p className="eyebrow">SECURE CHECKOUT</p><h1>Checking your<br/><em>account.</em></h1></main></PublicShell>;
   if(!isAuthenticated)return <PublicShell><main className="checkout-page complete"><div className="complete-mark"><LockKeyhole size={31}/></div><p className="eyebrow">ACCOUNT REQUIRED</p><h1>Sign in to<br/><em>continue.</em></h1><p>Create or access your real ArveX account before ordering a service.</p><Button onClick={login} className="btn-large" data-testid="button-checkout-login">Sign in to order <ArrowRight size={16}/></Button></main></PublicShell>;
   if(done)return <PublicShell><main className="checkout-page complete"><div className="complete-mark"><Check size={31}/></div><p className="eyebrow">ORDER CONFIRMED / {orderId}</p><h1>Welcome to the<br/><em>network.</em></h1><p>Your order was received for {user?.email}. We sent the order details to the ArveX operations channel.</p><Link href="/dashboard" className="btn btn-primary btn-large" data-testid="link-checkout-dashboard">Open client portal <ArrowRight size={16}/></Link></main></PublicShell>;
