@@ -7,6 +7,12 @@ const router: IRouter = Router();
 const SESSION_COOKIE = "arvex_admin_session";
 const ADMIN_SESSION_TTL = 8 * 60 * 60 * 1000;
 
+const VPS_PRICES: Record<string, number> = {
+  'ARX-VPS-02': 680, 'ARX-VPS-04': 1350, 'ARX-VPS-06': 1950, 'ARX-VPS-08': 2650,
+  'ARX-VPS-12': 3850, 'ARX-VPS-16': 5200, 'ARX-VPS-24': 7250, 'ARX-VPS-32': 9500,
+  'ARX-VPS-48': 14250, 'ARX-VPS-64': 18500, 'ARX-VPS-96': 24000, 'ARX-VPS-128': 29000,
+};
+
 function requiredString(value: unknown, field: string) {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`${field} is required`);
@@ -50,6 +56,13 @@ router.post("/orders", async (req, res) => {
     const service = requiredString(req.body?.service, "service");
     const region = requiredString(req.body?.region, "region");
     const total = Number(req.body?.total);
+    const currency = typeof req.body?.currency === 'string' ? req.body.currency.toUpperCase() : 'USD';
+    if (service === 'vps') {
+      const expected = VPS_PRICES[plan];
+      if (!expected || currency !== 'LKR' || Math.abs(total - expected) > 0.01) {
+        return res.status(400).json({ message: 'Invalid VPS plan or price.' });
+      }
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ message: "Enter a valid email address." });
     }
@@ -87,7 +100,7 @@ router.post("/orders", async (req, res) => {
             { name: "Customer", value: `${name}\n${email}`, inline: true },
             { name: "Service", value: `${service} / ${plan}`, inline: true },
             { name: "Region", value: region, inline: true },
-            { name: "Total", value: `$${total.toFixed(2)} / month`, inline: true },
+            { name: "Total", value: `${currency} ${total.toFixed(2)} / month`, inline: true },
           ],
           timestamp: new Date().toISOString(),
           footer: { text: "ArveX Hosting order desk" },
