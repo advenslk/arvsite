@@ -1,7 +1,5 @@
 import { type NextFunction, type Request, type Response } from "express";
-import * as oidc from "openid-client";
-import { clearSession, getOidcConfig, getSession, getSessionId, updateSession, type SessionData } from "../lib/auth";
-import type { AuthUser } from "../lib/auth";
+import { clearSession, getSession, getSessionId, type AuthUser } from "../lib/auth";
 
 declare global {
   namespace Express {
@@ -11,27 +9,12 @@ declare global {
   }
 }
 
-async function refreshIfExpired(sid: string, session: SessionData) {
-  const now = Math.floor(Date.now() / 1000);
-  if (!session.expires_at || now <= session.expires_at || !session.refresh_token) return session;
-  try {
-    const tokens = await oidc.refreshTokenGrant(await getOidcConfig(), session.refresh_token);
-    session.access_token = tokens.access_token;
-    session.refresh_token = tokens.refresh_token ?? session.refresh_token;
-    session.expires_at = tokens.expiresIn() ? now + tokens.expiresIn()! : session.expires_at;
-    await updateSession(sid, session);
-    return session;
-  } catch { return null; }
-}
-
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   req.isAuthenticated = function (this: Request) { return this.user != null; } as Request["isAuthenticated"];
   const sid = getSessionId(req);
   if (!sid) return next();
   const session = await getSession(sid);
   if (!session?.user?.id) { await clearSession(res, sid); return next(); }
-  const refreshed = await refreshIfExpired(sid, session);
-  if (!refreshed) { await clearSession(res, sid); return next(); }
-  req.user = refreshed.user;
+  req.user = session.user;
   return next();
 }
