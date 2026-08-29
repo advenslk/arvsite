@@ -1,13 +1,37 @@
 import { useCallback, useEffect, useState } from "react";
 
 export interface AuthUser { id: string; email: string | null; firstName: string | null; lastName: string | null; profileImageUrl: string | null; emailVerified: boolean; role: string; }
-
 type ApiResult = { ok?: boolean; error?: string; challenge?: string; email?: string; role?: string; message?: string; user?: AuthUser };
 
+const nativeFetch = window.fetch.bind(window);
+let adminOtpInstalled = false;
+
+function installAdminOtpInterceptor() {
+  if (adminOtpInstalled) return;
+  adminOtpInstalled = true;
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const response = await nativeFetch(input, init);
+    if (!url.endsWith("/api/admin/login") || !response.ok) return response;
+    const data = await response.clone().json().catch(() => null) as ApiResult | null;
+    if (data?.challenge !== "admin_otp" || !data.email) return response;
+    const code = window.prompt(`ArveX Admin Verification\n\nA 6-digit security code was sent to ${data.email}.\nEnter the code to continue:`);
+    if (!code) return new Response(JSON.stringify({ message: "Administrator verification was cancelled." }), { status: 401, headers: { "Content-Type": "application/json" } });
+    try {
+      const verified = await nativeFetch("/api/admin/verify", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: data.email, code: code.trim() }) });
+      return verified;
+    } catch {
+      return new Response(JSON.stringify({ message: "Administrator verification failed." }), { status: 401, headers: { "Content-Type": "application/json" } });
+    }
+  };
+}
+
+installAdminOtpInterceptor();
+
 async function api(path: string, body: Record<string, unknown>): Promise<ApiResult> {
-  const response = await fetch(path, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const response = await nativeFetch(path, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(data.error || "Request failed"), { data });
+  if (!response.ok) throw Object.assign(new Error(data.error || data.message || "Request failed"), { data });
   return data;
 }
 
@@ -47,13 +71,13 @@ function renderReset(email: string, returnTo: string) {
   const r = root(); if (!r) return;
   r.innerHTML = `<div class="auth-form-head"><p class="eyebrow">PASSWORD RESET</p><h2>Choose a new password.</h2><p>Enter the reset code sent to <strong>${escapeHtml(email)}</strong>.</p></div><form class="settings-form" data-reset-form><label>RESET CODE<input name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="000000" /></label><label>NEW PASSWORD<input name="password" type="password" minlength="8" maxlength="128" required placeholder="At least 8 characters" /></label><button class="btn btn-primary auth-submit" type="submit">Update password <span>→</span></button></form>`;
   const form = r.querySelector<HTMLFormElement>("[data-reset-form]")!;
-  form.addEventListener("submit", async e => { e.preventDefault(); setBusy(form, true); try { const body = Object.fromEntries(new FormData(form).entries()); body.email = email; await api("/api/auth/reset-password", body); renderAuthForm("login", returnTo); } catch (e) { errorBox(e instanceof Error ? e.message : "Unable to reset password"); } finally { setBusy(form, false); } });
+  form.addEventListener("submit", async e => { e.preventDefault(); setBusy(form, true); try { const body: Record<string, unknown> = Object.fromEntries(new FormData(form).entries()); body.email = email; await api("/api/auth/reset-password", body); renderAuthForm("login", returnTo); } catch (e) { errorBox(e instanceof Error ? e.message : "Unable to reset password"); } finally { setBusy(form, false); } });
 }
 
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setLoading] = useState(true);
-  useEffect(() => { fetch("/api/auth/user", { credentials: "include" }).then(r => r.json()).then(data => setUser(data.user ?? null)).catch(() => setUser(null)).finally(() => setLoading(false)); }, []);
+  useEffect(() => { nativeFetch("/api/auth/user", { credentials: "include" }).then(r => r.json()).then(data => setUser(data.user ?? null)).catch(() => setUser(null)).finally(() => setLoading(false)); }, []);
   const login = useCallback(() => {
     const path = window.location.pathname;
     const returnTo = new URLSearchParams(window.location.search).get("returnTo") || (path === "/login" || path === "/register" ? "/dashboard" : path);
